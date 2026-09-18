@@ -1,0 +1,8 @@
+{
+  "listen_address": "127.0.0.1",
+  "listen_port": 8080,
+  "database_path": "data/tsto.db",
+  "town_directory": "data/towns",
+  "session_ttl_seconds": 2592000,
+  "max_request_bytes": 10485760
+}
