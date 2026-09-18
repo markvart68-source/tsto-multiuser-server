@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Player Panel</title>
+  <link rel="stylesheet" href="/webpanel/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div><span class="eyebrow">PLAYER PANEL</span><h1>My account</h1></div>
+      <button id="logout" class="secondary">Log out</button>
+    </header>
+
+    <div id="notice" class="notice" role="status"></div>
+
+    <section id="login-card" class="card auth-card">
+      <h2>Sign in</h2>
+      <p class="muted">Use your server account to manage your town and account-owned balances.</p>
+      <form id="login-form">
+        <label>Email<input name="email" type="email" autocomplete="username" required></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+        <label>Device ID<input name="device_id" placeholder="phone-or-browser-id" required></label>
+        <button>Sign in</button>
+      </form>
+    </section>
+
+    <section id="dashboard" hidden>
+      <div class="grid">
+        <article class="card">
+          <h2>Account</h2>
+          <dl id="account-details"><dt>Status</dt><dd>Loading…</dd></dl>
+        </article>
+        <article class="card">
+          <h2>Currencies</h2>
+          <p class="muted">Balances are shared between all devices on this account.</p>
+          <div id="currencies" class="balances"></div>
+          <form id="currency-form" class="currency-form">
+            <label>Currency<select name="currency"><option value="donuts">Donuts</option><option value="cash">Cash</option><option value="coins">Coins</option></select></label>
+            <label>Amount<input name="amount" type="number" min="0" step="1" required></label>
+            <button type="submit">Save balance</button>
+          </form>
+        </article>
+      </div>
+      <article class="card town-card">
+        <div class="card-heading"><div><h2>Town sync</h2><p class="muted">Revision-safe save/load for your account.</p></div><button id="refresh-town" class="secondary">Refresh</button></div>
+        <p>Current revision: <strong id="town-revision">—</strong></p>
+        <textarea id="town-payload" rows="8" placeholder="Town payload"></textarea>
+        <button id="save-town">Save town</button>
+      </article>
+    </section>
+  </main>
+  <script src="/webpanel/app.js" defer></script>
+</body>
+</html>
