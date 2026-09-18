@@ -1,29 +1,7 @@
 #include "http/api_router.hpp"
 #include <cctype>
 #include <stdexcept>
-
-namespace tsto { namespace {
-std::string json_escape(const std::string& value) { std::string out; for (char c : value) { if (c == '"') out += "\\\""; else if (c == '\\') out += "\\\\"; else if (c == '\n') out += "\\n"; else if (c == '\r') out += "\\r"; else out += c; } return out; }
-std::string field(const std::string& json, const std::string& key) {
-    const auto marker = "\"" + key + "\""; auto p = json.find(marker); if (p == std::string::npos) return {};
-    p = json.find(':', p + marker.size()); if (p == std::string::npos) return {}; ++p; while (p < json.size() && std::isspace(static_cast<unsigned char>(json[p]))) ++p;
-    if (p < json.size() && json[p] == '"') { ++p; std::string out; bool escaped = false; for (; p < json.size(); ++p) { char c = json[p]; if (escaped) { out += c; escaped = false; } else if (c == '\\') escaped = true; else if (c == '"') break; else out += c; } return out; }
-    const auto end = json.find_first_of(",}", p); return json.substr(p, end == std::string::npos ? json.size() - p : end - p);
-}
-HttpResponse error_response(int status, const std::string& message) { return {status, "{\"error\":\"" + json_escape(message) + "\"}"}; }
-}
-ApiRouter::ApiRouter(AuthService& auth, TownService& towns) : auth_(auth), towns_(towns) {}
-HttpResponse ApiRouter::handle(const HttpRequest& request) {
-    try {
-        if (request.method == "POST" && request.path == "/v1/auth/register") { auto r = auth_.register_account(field(request.body,"email"), field(request.body,"password"), field(request.body,"display_name"), field(request.body,"device_id")); return {201, "{\"account_id\":" + std::to_string(r.account.id) + ",\"token\":\"" + r.access_token + "\"}"}; }
-        if (request.method == "POST" && request.path == "/v1/auth/login") { auto r = auth_.login(field(request.body,"email"), field(request.body,"password"), field(request.body,"device_id")); return {200, "{\"account_id\":" + std::to_string(r.account.id) + ",\"token\":\"" + r.access_token + "\"}"}; }
-        const auto session = auth_.authenticate(request.authorization);
-        if (request.method == "POST" && request.path == "/v1/devices") { auth_.register_device(session, field(request.body,"device_id"), field(request.body,"platform"), field(request.body,"app_version")); return {201, "{\"registered\":true}"}; }
-        if (request.method == "GET" && request.path == "/v1/town") { const auto town = towns_.load(session.account_id); return {200, "{\"revision\":" + std::to_string(town.revision) + ",\"payload\":\"" + json_escape(town.payload) + "\"}"}; }
-        if (request.method == "PUT" && request.path == "/v1/town") { const auto revision = std::stoll(field(request.body,"expected_revision")); const auto town = towns_.save(session.account_id, revision, field(request.body,"payload")); return {200, "{\"revision\":" + std::to_string(town.revision) + "}"}; }
-        return error_response(404, "not_found");
-    } catch (const TownConflict&) { return error_response(409, "revision_conflict"); }
-      catch (const std::invalid_argument& e) { return error_response(400, e.what()); }
-      catch (const std::exception& e) { return error_response(401, e.what()); }
-}
+namespace tsto {namespace {std::string esc(const std::string&v){std::string o;for(char c:v){if(c=='"')o+="\\\"";else if(c=='\\')o+="\\\\";else if(c=='\n')o+="\\n";else o+=c;}return o;}std::string field(const std::string&j,const std::string&k){auto p=j.find("\""+k+"\"");if(p==std::string::npos)return{};p=j.find(':',p);if(p==std::string::npos)return{};++p;while(p<j.size()&&std::isspace(static_cast<unsigned char>(j[p])))++p;if(p<j.size()&&j[p]=='"'){++p;std::string o;for(;p<j.size()&&j[p]!='"';++p){if(j[p]=='\\'&&p+1<j.size())++p;o+=j[p];}return o;}auto e=j.find_first_of(",}",p);return j.substr(p,e==std::string::npos?std::string::npos:e-p);}HttpResponse err(int s,const std::string&m){return{s,"{\"error\":\""+esc(m)+"\"}"};}std::string currencies(const std::map<std::string,std::int64_t>&m){std::string o="{\"currencies\":{";bool first=true;for(auto&[k,v]:m){if(!first)o+=',';first=false;o+='\"'+esc(k)+"\":"+std::to_string(v);}return o+"}}";}}
+ApiRouter::ApiRouter(AuthService&a,TownService&t):auth_(a),towns_(t){}
+HttpResponse ApiRouter::handle(const HttpRequest&r){try{if(r.method=="POST"&&r.path=="/v1/auth/login"){auto x=auth_.login(field(r.body,"email"),field(r.body,"password"),field(r.body,"device_id"));return{200,"{\"account_id\":"+std::to_string(x.account.id)+",\"token\":\""+x.access_token+"\"}"};}if(r.method=="POST"&&r.path=="/v1/auth/register"){auto x=auth_.register_account(field(r.body,"email"),field(r.body,"password"),field(r.body,"display_name"),field(r.body,"device_id"));return{201,"{\"account_id\":"+std::to_string(x.account.id)+",\"token\":\""+x.access_token+"\"}"};}auto s=auth_.authenticate(r.authorization);if(r.method=="GET"&&r.path=="/v1/me"){auto a=auth_.account(s.account_id);return{200,"{\"id\":"+std::to_string(a.id)+",\"email\":\""+esc(a.email)+"\",\"display_name\":\""+esc(a.display_name)+"\"}"};}if(r.method=="GET"&&r.path=="/v1/currencies"){return{200,currencies(auth_.currencies(s.account_id))};}if(r.method=="PUT"&&r.path=="/v1/currencies"){auto c=field(r.body,"currency");auto amount=std::stoll(field(r.body,"amount"));auth_.set_currency(s,c,amount);return{200,currencies(auth_.currencies(s.account_id))};}if(r.method=="POST"&&r.path=="/v1/devices"){auth_.register_device(s,field(r.body,"device_id"),field(r.body,"platform"),field(r.body,"app_version"));return{201,"{\"registered\":true}"};}if(r.method=="GET"&&r.path=="/v1/town"){auto t=towns_.load(s.account_id);return{200,"{\"revision\":"+std::to_string(t.revision)+",\"payload\":\""+esc(t.payload)+"\"}"};}if(r.method=="PUT"&&r.path=="/v1/town"){auto t=towns_.save(s.account_id,std::stoll(field(r.body,"expected_revision")),field(r.body,"payload"));return{200,"{\"revision\":"+std::to_string(t.revision)+"}"};}return err(404,"not_found");}catch(const TownConflict&){return err(409,"revision_conflict");}catch(const std::invalid_argument&e){return err(400,e.what());}catch(const std::exception&e){return err(401,e.what());}}
 }
