@@ -1,7 +1,29 @@
-#include "http/api_router.hpp"
-#include <cctype>
-#include <stdexcept>
-namespace tsto {namespace {std::string esc(const std::string&v){std::string o;for(char c:v){if(c=='"')o+="\\\"";else if(c=='\\')o+="\\\\";else if(c=='\n')o+="\\n";else o+=c;}return o;}std::string field(const std::string&j,const std::string&k){auto p=j.find("\""+k+"\"");if(p==std::string::npos)return{};p=j.find(':',p);if(p==std::string::npos)return{};++p;while(p<j.size()&&std::isspace(static_cast<unsigned char>(j[p])))++p;if(p<j.size()&&j[p]=='"'){++p;std::string o;for(;p<j.size()&&j[p]!='"';++p){if(j[p]=='\\'&&p+1<j.size())++p;o+=j[p];}return o;}auto e=j.find_first_of(",}",p);return j.substr(p,e==std::string::npos?std::string::npos:e-p);}HttpResponse err(int s,const std::string&m){return{s,"{\"error\":\""+esc(m)+"\"}"};}std::string currencies(const std::map<std::string,std::int64_t>&m){std::string o="{\"currencies\":{";bool first=true;for(auto&[k,v]:m){if(!first)o+=',';first=false;o+='\"'+esc(k)+"\":"+std::to_string(v);}return o+"}}";}}
-ApiRouter::ApiRouter(AuthService&a,TownService&t):auth_(a),towns_(t){}
-HttpResponse ApiRouter::handle(const HttpRequest&r){try{if(r.method=="POST"&&r.path=="/v1/auth/login"){auto x=auth_.login(field(r.body,"email"),field(r.body,"password"),field(r.body,"device_id"));return{200,"{\"account_id\":"+std::to_string(x.account.id)+",\"token\":\""+x.access_token+"\"}"};}if(r.method=="POST"&&r.path=="/v1/auth/register"){auto x=auth_.register_account(field(r.body,"email"),field(r.body,"password"),field(r.body,"display_name"),field(r.body,"device_id"));return{201,"{\"account_id\":"+std::to_string(x.account.id)+",\"token\":\""+x.access_token+"\"}"};}auto s=auth_.authenticate(r.authorization);if(r.method=="GET"&&r.path=="/v1/me"){auto a=auth_.account(s.account_id);return{200,"{\"id\":"+std::to_string(a.id)+",\"email\":\""+esc(a.email)+"\",\"display_name\":\""+esc(a.display_name)+"\"}"};}if(r.method=="GET"&&r.path=="/v1/currencies"){return{200,currencies(auth_.currencies(s.account_id))};}if(r.method=="PUT"&&r.path=="/v1/currencies"){auto c=field(r.body,"currency");auto amount=std::stoll(field(r.body,"amount"));auth_.set_currency(s,c,amount);return{200,currencies(auth_.currencies(s.account_id))};}if(r.method=="POST"&&r.path=="/v1/devices"){auth_.register_device(s,field(r.body,"device_id"),field(r.body,"platform"),field(r.body,"app_version"));return{201,"{\"registered\":true}"};}if(r.method=="GET"&&r.path=="/v1/town"){auto t=towns_.load(s.account_id);return{200,"{\"revision\":"+std::to_string(t.revision)+",\"payload\":\""+esc(t.payload)+"\"}"};}if(r.method=="PUT"&&r.path=="/v1/town"){auto t=towns_.save(s.account_id,std::stoll(field(r.body,"expected_revision")),field(r.body,"payload"));return{200,"{\"revision\":"+std::to_string(t.revision)+"}"};}return err(404,"not_found");}catch(const TownConflict&){return err(409,"revision_conflict");}catch(const std::invalid_argument&e){return err(400,e.what());}catch(const std::exception&e){return err(401,e.what());}}
+#pragma once
+#include "auth/auth_service.hpp"
+#include "services/town_service.hpp"
+#include <string>
+
+namespace tsto {
+struct HttpRequest {
+    std::string method;
+    std::string path;
+    std::string authorization;
+    std::string body;
+};
+
+struct HttpResponse {
+    int status{200};
+    std::string body;
+    std::string content_type{"application/json; charset=utf-8"};
+};
+
+class ApiRouter {
+public:
+    ApiRouter(AuthService&, TownService&);
+    HttpResponse handle(const HttpRequest&);
+
+private:
+    AuthService& auth_;
+    TownService& towns_;
+};
 }
