@@ -3,6 +3,7 @@
   "listen_port": 8080,
   "database_path": "data/tsto.db",
   "town_directory": "data/towns",
+  "dlc_directory": "dlc",
   "session_ttl_seconds": 2592000,
   "max_request_bytes": 10485760
 }

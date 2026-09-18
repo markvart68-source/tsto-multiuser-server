@@ -1,26 +1,23 @@
-#include "config/config.hpp"
-#include "database/database.hpp"
-#include "auth/auth_service.hpp"
-#include "services/town_service.hpp"
-#include "http/api_router.hpp"
-#include "http/http_server.hpp"
-#include <iostream>
-
-int main() {
-    try {
-        const auto config = tsto::load_config("config/server.json");
-        tsto::Database db(config.database_path);
-        db.migrate();
-        tsto::AuthService auth(db, config);
-        tsto::TownService towns(db);
-        tsto::ApiRouter router(auth, towns);
-        tsto::HttpServer server(config, router, "webpanel");
-
-        std::cout << "TSTO server listening at http://" << config.listen_address << ':' << config.listen_port << "/webpanel/\n";
-        server.run();
-    } catch (const std::exception& error) {
-        std::cerr << "startup failed: " << error.what() << '\n';
-        return 1;
-    }
-    return 0;
-}
+cmake_minimum_required(VERSION 3.20)
+project(tsto_multiuser_server VERSION 0.1.0 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+find_package(SQLite3 REQUIRED)
+find_package(OpenSSL REQUIRED)
+add_library(tsto-core src/config/config.cpp src/database/database.cpp src/auth/auth_service.cpp src/http/api_router.cpp src/http/http_server.cpp src/services/town_service.cpp)
+target_include_directories(tsto-core PUBLIC src)
+target_link_libraries(tsto-core PUBLIC SQLite::SQLite3 OpenSSL::Crypto)
+target_compile_options(tsto-core PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>)
+if(WIN32)
+  target_link_libraries(tsto-core PUBLIC Ws2_32)
+endif()
+add_executable(tsto-server src/main.cpp)
+target_link_libraries(tsto-server PRIVATE tsto-core)
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(tsto-tests tests/test_server.cpp)
+  target_link_libraries(tsto-tests PRIVATE tsto-core)
+  add_test(NAME tsto-tests COMMAND tsto-tests)
+endif()
+configure_file(config/server.example.json config/server.json COPYONLY)
